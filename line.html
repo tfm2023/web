@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/8.6.7/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.7/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.7/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <style>
+    /* Estilo adicional para ocultar inicialmente la página */
+    body:not(.authenticated) {
+      display: none;
+    }
+    
+    /* Estilo adicional para mostrar la página cuando el usuario está autenticado */
+    body.authenticated {
+      display: block;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #F0F2F5;
+      margin: 0;
+      padding: 0;
+    }
+
+    #header {
+      background-color: #336699;
+      color: #FFFFFF;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+    }
+
+    #menu {
+      background-color: #003366;
+      padding: 10px;
+      text-align: center;
+    }
+
+    #menu a {
+      color: #FFFFFF;
+      text-decoration: none;
+      margin-right: 10px;
+    }
+
+    #chartContainer {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 500px;
+    }
+
+    #chart {
+      width: 800px;
+      height: 400px;
+      background-color: #FFFFFF;
+      border-radius: 5px;
+      box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+  <script>
+    // Configuración de Firebase
+    var firebaseConfig = {
+      apiKey: "",
+      authDomain: "",
+      databaseURL: "",
+      projectId: "",
+      storageBucket: "",
+      messagingSenderId: "",
+      appId: ""
+    };
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+
+    // Cargar la librería de Google Charts
+    google.charts.load('current', {'packages':['corechart']});
+    google.charts.setOnLoadCallback(checkAuthState);
+
+    // Función para verificar el estado de autenticación del usuario
+    function checkAuthState() {
+      // Verificar si hay una sesión activa
+      firebase.auth().onAuthStateChanged(function(user) {
+        if (user) {
+          // El usuario está autenticado, mostrar el contenido del dashboard
+          showDashboard();
+          // Agregar la clase 'authenticated' al elemento <body> para mostrar la página
+          document.body.classList.add('authenticated');
+        } else {
+          window.location.href = "index.html";
+        }
+      });
+    }
+
+    // Función para mostrar el gráfico de línea
+    function showDashboard() {
+      // Obtener la referencia a la base de datos
+      var db = firebase.database();
+      var dbRef = db.ref("/");
+
+      // Crear el DataTable de Google Charts
+      var chartData = new google.visualization.DataTable();
+      chartData.addColumn('date', 'Date');
+      chartData.addColumn('number', 'Correos electónicos no deseados');
+
+      // Obtener los datos de Firebase en tiempo real
+      dbRef.on('value', function(snapshot) {
+        var data = snapshot.val();
+        if (data) {
+          // Objeto para almacenar el número de filas por fecha
+          var rowsCount = {};
+
+          // Calcular la fecha actual y hace 30 días
+          var today = new Date();
+          today.setHours(0, 0, 0, 0);
+          var thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+          // Ordenar los datos por fecha
+          var sortedData = Object.values(data).sort(function(a, b) {
+            return new Date(a.date) - new Date(b.date);
+          });
+
+          // Recorrer los datos ordenados y contar el número de filas por fecha
+          sortedData.forEach(function(entry) {
+            var date = new Date(entry.date);
+            date.setHours(0, 0, 0, 0);
+
+            // Verificar si la fecha está dentro del rango de los últimos 30 días
+            if (date >= thirtyDaysAgo && date <= today) {
+              var formattedDate = formatDate(date);
+              if (rowsCount[formattedDate]) {
+                rowsCount[formattedDate] += 1;
+              } else {
+                rowsCount[formattedDate] = 1;
+              }
+            }
+          });
+
+          // Recorrer el objeto de conteo y agregar los datos al DataTable
+          Object.entries(rowsCount).forEach(function([date, count]) {
+            chartData.addRow([new Date(date), count]);
+          });
+
+          // Configuración del gráfico de línea
+          var chartOptions = {
+            title: 'Correos electónicos no deseados detectados este mes',
+            curveType: 'function',
+            legend: { position: 'bottom' },
+            width: '100%', // Se ajusta el ancho del gráfico al contenedor
+            height: '100%', // Se ajusta la altura del gráfico al contenedor
+            pointSize: 5, // Tamaño de la marca en cada punto del gráfico
+            hAxis: {
+              format: 'dd/MM/yyyy' // Formato de fecha para el eje X
+            },
+            vAxis: {
+              minValue: 0, // Valor mínimo del eje Y
+              viewWindow: {
+                min: 0 // Valor mínimo visible en el eje Y
+              }
+            },
+            tooltip: {
+              format: 'dd/MM/yyyy' // Formato de fecha para el tooltip
+            },
+            chartArea: {
+              left: 50,
+              top: 50,
+              width: '90%',
+              height: '70%' // Ajustar el área del gráfico para mostrar el tooltip completo
+            }
+          };
+
+          // Crear el gráfico de línea y dibujarlo en el elemento con ID "chart"
+          var chart = new google.visualization.LineChart(document.getElementById('chart'));
+          chart.draw(chartData, chartOptions);
+        }
+      });
+    }
+
+    // Función para formatear la fecha como 'dd/mm/yyyy'
+    function formatDate(date) {
+      var day = String(date.getDate()).padStart(2, '0');
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var year = date.getFullYear();
+      return year + '/' + month + '/' + day;
+    }
+
+    function logout() {
+      firebase.auth().signOut().then(function() {
+        // Redirecciona al usuario a la página de inicio de sesión o a donde desees
+        window.location.href = "index.html";
+      }).catch(function(error) {
+        // Manejo de errores en caso de que ocurra alguno durante el logout
+        console.log(error.message);
+      });
+    }
+  </script>
+</head>
+<body>
+  <div id="header">
+    <h1>Visualización de los datos</h1>
+  </div>
+  <div id="menu">
+    <a href="counter.html">Contador de hoy</a>
+    <a href="line.html" class="active">Gráfica del mes</a>
+    <a href="bar.html">Gráfica del año</a>
+    <a href="table.html">Detalles</a>
+    <a href="#" onclick="logout()">Cerrar sesión</a>
+  </div>
+  <div id="chartContainer">
+    <div id="chart"></div>
+  </div>
+</body>
+</html>

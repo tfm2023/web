@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Spam monitor</title>
+  <style>
+
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #fff;
+      box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    tr:hover {
+      background-color: #e6e6e6;
+    }
+
+    #data-container {
+      margin-top: 20px;
+      padding: 20px;
+      background-color: #fff;
+      box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+    }
+
+
+    /* Estilo adicional para ocultar inicialmente la página */
+    body:not(.authenticated) {
+      display: none;
+    }
+    
+
+    /* Estilo adicional para mostrar la página cuando el usuario está autenticado */
+    body.authenticated {
+      display: block;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #F0F2F5;
+      margin: 0;
+      padding: 0;
+    }
+
+    #header {
+      background-color: #336699;
+      color: #FFFFFF;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+    }
+
+    #menu {
+      background-color: #003366;
+      padding: 10px;
+      text-align: center;
+    }
+
+    #menu a {
+      color: #FFFFFF;
+      text-decoration: none;
+      margin-right: 10px;
+    }
+  </style>
+
+<script src="https://www.gstatic.com/firebasejs/8.6.7/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.6.7/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.6.7/firebase-database.js"></script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
+<script>
+    // Configuración de Firebase
+    var firebaseConfig = {
+      apiKey: "",
+      authDomain: "",
+      databaseURL: "",
+      projectId: "",
+      storageBucket: "",
+      messagingSenderId: "",
+      appId: ""
+    };
+
+  // Inicializar Firebase
+  firebase.initializeApp(firebaseConfig);
+
+  // Cargar la librería de Google Charts
+  google.charts.load('current', {'packages':['corechart']});
+  google.charts.setOnLoadCallback(checkAuthState);
+
+  // Función para verificar el estado de autenticación del usuario
+  function checkAuthState() {
+    // Verificar si hay una sesión activa
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (user) {
+        // El usuario está autenticado, mostrar el contenido del dashboard
+        // Agregar la clase 'authenticated' al elemento <body> para mostrar la página
+        document.body.classList.add('authenticated');
+        showDashboard();
+      } else {
+        window.location.href = "index.html";
+      }
+    });
+  }
+
+      // Función para mostrar el gráfico de línea
+  function showDashboard() {
+
+      // Obtener la referencia a la base de datos
+    var db = firebase.database();
+    var dbRef = db.ref("/");
+
+    function formatDate(timestamp) {
+      const date = new Date(timestamp);
+      const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: false };
+      const formattedDate = date.toLocaleString('es-ES', options);
+      return formattedDate.replace(',', '');
+    }
+
+
+    function update_table(data) {
+        const container = document.getElementById("data-container");
+
+        if (data) {
+            let html = "<table>";
+            html += "<tr><th>Fecha</th><th>Correo electrónico</th><th>Asunto</th></tr>";
+            Object.values(data).forEach((entry) => {
+            const formattedDate = formatDate(entry.date);
+            html += `<tr>
+                      <td>${formattedDate}</td>
+                      <td>${entry.email}</td>
+                      <td>${entry.subject}</td>
+                   </tr>`;
+            });
+            html += "</table>";
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = "<p>No hay datos disponibles</p>";
+        }
+    }
+  
+
+// Escuchar cambios en la base de datos en tiempo real
+      // Obtener los datos de Firebase en tiempo real
+ dbRef.on('value', function(snapshot) {
+    const data = snapshot.val();
+    if (data) {
+      update_table(data);
+    }
+  });
+
+}
+
+  function logout() {
+      firebase.auth().signOut().then(function() {
+        // Redirecciona al usuario a la página de inicio de sesión o a donde desees
+        window.location.href = "index.html";
+      }).catch(function(error) {
+        // Manejo de errores en caso de que ocurra alguno durante el logout
+        console.log(error.message);
+      });
+    }
+
+  </script>
+</head>
+<body>
+  <div id="header">
+    <h1>Visualización de los datos</h1>
+  </div>
+  <div id="menu">
+    <a href="counter.html">Contador de hoy</a>
+    <a href="line.html" class="active">Gráfica del mes</a>
+    <a href="bar.html">Gráfica del año</a>
+    <a href="table.html">Detalles</a>
+    <a href="#" onclick="logout()">Cerrar sesión</a>
+  </div>
+  <div id="data-container">
+    <p>Loading data...</p>
+  </div>
+</body>
+</html>
